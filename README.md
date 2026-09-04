@@ -83,29 +83,11 @@ sequenceDiagram
 ## Warehouse model
 
 ```mermaid
-erDiagram
-    DIM_PRODUCTS ||--o{ FCT_PRICES : "has price observations"
+flowchart LR
+    D["dim_products<br/>PK: product_key<br/>source_id, category_id, source_product_id<br/>current_product_name, source_url"]
+    F["fct_prices<br/>PK: observation_id<br/>FK: product_key<br/>observed_at, price, original_price, status, run_id"]
 
-    DIM_PRODUCTS {
-        string product_key PK
-        string source_id
-        string category_id
-        string source_product_id
-        string current_product_name
-        string source_url
-    }
-
-    FCT_PRICES {
-        string observation_id PK
-        string product_key FK
-        string source_id
-        string source_product_id
-        timestamp observed_at
-        numeric price
-        numeric original_price
-        string status
-        string run_id
-    }
+    D -->|"one product has many price observations"| F
 ```
 
 - **`dim_products`** keeps the latest known identity and link for each retailer product.
