@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: erpm-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - .minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+  postgres:
+    image: postgres:15
+    container_name: erpm-postgres
+    environment:
+      - POSTGRES_USER=erpm
+      - POSTGRES_PASSWORD=erpm
+      - POSTGRES_DB=warehouse
+    ports:
+      - "5432:5432"
+    volumes:
+      - .pg_data:/var/lib/postgresql/data

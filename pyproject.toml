@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "electronics-retail-price-monitor"
+version = "0.1.0"
+description = "Phase 1 public catalogue extraction proof of concept"
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12,<5",
+  "pydantic>=2.7,<3",
+  "requests>=2.31,<3",
+  "truststore>=0.10,<1",
+  "minio>=7.2,<8",
+  "python-dotenv>=1.0,<2",
+  "pyarrow>=15.0,<16",
+  "pandas>=2.0,<3",
+  "sqlalchemy>=2.0,<3",
+  "psycopg2-binary>=2.9,<3",
+  "dbt-postgres>=1.7,<2"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100

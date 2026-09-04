@@ -1,0 +1,13 @@
+name: 'erpm_dbt'
+version: '1.0.0'
+config-version: 2
+profile: 'erpm_profile'
+model-paths: ["models"]
+models:
+  erpm_dbt:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

@@ -1,0 +1,30 @@
+version: 2
+models:
+  - name: fct_prices
+    columns:
+      - name: observation_id
+        tests:
+          - unique
+          - not_null
+      - name: source_id
+        tests:
+          - not_null
+      - name: observed_at
+        tests:
+          - not_null
+      - name: price
+        tests:
+          - not_null
+      - name: source_product_id
+        tests:
+          - not_null
+
+  - name: dim_products
+    columns:
+      - name: product_key
+        tests:
+          - unique
+          - not_null
+      - name: source_product_id
+        tests:
+          - not_null
