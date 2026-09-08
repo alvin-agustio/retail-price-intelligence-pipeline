@@ -128,6 +128,14 @@ flowchart LR
 
 ### Start the current local platform
 
+Create a local `.env` file from the safe template first, then replace the two placeholder values with your own local-only passwords:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env` is ignored by Git and must never be committed.
+
 ```powershell
 docker compose up -d
 ```

@@ -6,10 +6,15 @@ from minio import Minio
 
 
 def get_client() -> Minio:
+    access_key = os.environ.get("MINIO_ACCESS_KEY")
+    secret_key = os.environ.get("MINIO_SECRET_KEY")
+    if not access_key or not secret_key:
+        raise RuntimeError("MINIO_ACCESS_KEY and MINIO_SECRET_KEY must be set")
+
     return Minio(
         endpoint=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
-        access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
-        secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
+        access_key=access_key,
+        secret_key=secret_key,
         secure=False,
     )
 

@@ -20,7 +20,9 @@ def main():
     client = bronze.get_client()
 
     db_user = os.environ.get("POSTGRES_USER", "erpm")
-    db_pass = os.environ.get("POSTGRES_PASSWORD", "erpm")
+    db_pass = os.environ.get("POSTGRES_PASSWORD")
+    if not db_pass:
+        raise RuntimeError("POSTGRES_PASSWORD must be set")
     db_host = os.environ.get("POSTGRES_HOST", "localhost")
     db_port = os.environ.get("POSTGRES_PORT", "5432")
     db_name = os.environ.get("POSTGRES_DB", "warehouse")

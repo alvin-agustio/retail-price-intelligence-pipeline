@@ -1,9 +1,32 @@
 from unittest.mock import MagicMock
 import pandas as pd
+import pytest
 import load_warehouse
 
 
+def test_load_warehouse_requires_postgres_password(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "load_warehouse.py",
+            "--source",
+            "test_src",
+            "--category",
+            "test_cat",
+            "--run-id",
+            "test_run_123",
+        ],
+    )
+    monkeypatch.setattr("bronze.get_client", lambda: MagicMock())
+    monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
+
+    with pytest.raises(RuntimeError, match="POSTGRES_PASSWORD"):
+        load_warehouse.main()
+
+
 def test_load_warehouse_idempotency(monkeypatch):
+    monkeypatch.setenv("POSTGRES_PASSWORD", "test-password")
+
     # Mock arguments
     monkeypatch.setattr(
         "sys.argv",
