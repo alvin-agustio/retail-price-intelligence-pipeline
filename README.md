@@ -140,7 +140,7 @@ Copy-Item .env.example .env
 docker compose up -d
 ```
 
-This starts MinIO and PostgreSQL. Airflow and Metabase are intentionally not in the Compose file yet because they belong to Phase 5.
+This starts MinIO, PostgreSQL, Metabase, and Airflow. Their generated local state is stored in `var/`, which is ignored by Git.
 
 ### Align the terminal with Anaconda
 
@@ -172,12 +172,15 @@ src/
 ├── silver.py           Parquet schema and writer
 └── load_warehouse.py   Silver-to-PostgreSQL loader
 
+dags/                   Airflow orchestration
+
 warehouse/
 ├── models/staging/     dbt source declaration and staging view
 └── models/marts/       dbt Gold dimension and fact models
 
 tests/                  pytest coverage for pipeline behaviour
-docs/                   architecture reference
+docs/                   architecture and project-layout reference
+var/                    ignored local Docker runtime state
 ```
 
 ## Roadmap
@@ -188,7 +191,7 @@ docs/                   architecture reference
 | 2. Ingestion & Bronze | Stored raw evidence, manifests, and rejected-record reports. | Complete |
 | 3. Silver & history | Built normalized append-only Parquet observations with schema checks. | Complete |
 | 4. Warehouse & Gold | Loaded PostgreSQL and built tested dbt marts. | Complete |
-| 5. Reliability & delivery | Add Airflow DAG, CI, expanded Docker Compose, observability, and Metabase. | Planned |
+| 5. Reliability & delivery | Airflow DAG, expanded Docker Compose, and Metabase local platform; CI and observability remain next. | In progress |
 
 ## What this project demonstrates
 
@@ -200,4 +203,4 @@ docs/                   architecture reference
 
 ## Important repository hygiene
 
-Secrets and local runtime data are excluded from version control. The repository does not track `.env`, MinIO data, PostgreSQL data, dbt build artifacts, logs, or Python caches.
+Secrets and local runtime data are excluded from version control. The repository does not track `.env`, `var/` service data, dbt build artifacts, or Python caches.

@@ -1,5 +1,6 @@
-import argparse
+﻿import argparse
 import os
+import sys
 import time
 import requests
 import uuid
@@ -17,13 +18,14 @@ def main():
     parser.add_argument("--category", choices=list(phase1_poc.CATEGORY_IDS), required=True)
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--delay", type=float, default=0.5)
+    parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
 
     bucket = os.environ.get("MINIO_BUCKET", "bronze")
     client = bronze.get_client()
     bronze.ensure_bucket(client, bucket)
 
-    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
+    run_id = args.run_id or f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
     plan = phase1_poc.dispatch_source_category(args.source, args.category)
 
     print(
@@ -73,19 +75,21 @@ def main():
             "records": [],
         }
         bronze.save_manifest(client, bucket, args.source, args.category, run_id, summary)
-        return
+        sys.exit(1)
 
     print(f"Ditemukan {len(product_urls)} URL produk.")
 
     for url in product_urls:
+        observed_at_utc = datetime.now(timezone.utc)
         record = {
             "url": url,
-            "fetch_time": datetime.now(timezone.utc).isoformat(),
+            "fetch_time": observed_at_utc.isoformat(),
             "parse_status": "FAILED",
             "raw_object_key": None,
             "rejected_key": None,
             "price_present": False,
         }
+
         try:
             html = fetch_wrapper(url)
             raw_key = bronze.save_raw_response(
@@ -93,9 +97,9 @@ def main():
             )
             record["raw_object_key"] = raw_key
 
-            obs = phase1_poc.parse_product_html(args.source, url, html, datetime.now(timezone.utc))
+            parsed = phase1_poc.parse_product_html(args.source, url, html, observed_at_utc)
             record["parse_status"] = "SUCCESS"
-            if obs.current_price_idr is not None:
+            if parsed.current_price_idr is not None:
                 record["price_present"] = True
             success_count += 1
         except Exception as e:
@@ -120,9 +124,14 @@ def main():
         "success": success_count,
         "failed": len(product_urls) - success_count,
         "records": records,
-        "status": "COMPLETED",
+        "status": "COMPLETED" if success_count > 0 else "FAILED_NO_DATA",
     }
     bronze.save_manifest(client, bucket, args.source, args.category, run_id, summary)
+
+    if success_count == 0:
+        print("Gagal: Tidak ada data valid yang berhasil diambil (success_count = 0).")
+        sys.exit(1)
+
     print(f"Selesai! Sukses: {success_count}, Gagal: {len(product_urls) - success_count}")
 
 

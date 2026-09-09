@@ -7,13 +7,14 @@ __pycache__/
 *.egg-info/
 .env
 data/
-logs/
-
-.minio_data/
 data/phase-2/
-
-.pg_data/
 warehouse/logs/
 warehouse/target/
 warehouse/dbt_packages/
 warehouse/.user.yml
+
+dags/__pycache__/
+
+# Local Docker service state
+var/*
+!var/.gitkeep

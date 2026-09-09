@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 import phase1_poc
@@ -29,7 +30,7 @@ def main():
         manifest = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         print(f"Gagal membaca manifest: {e}")
-        return
+        sys.exit(1)
 
     valid_records = []
 
@@ -81,13 +82,14 @@ def main():
             )
 
     # 4. Kemas ke Kaleng Vakum (Parquet)
-    if valid_records:
-        silver_key = silver.write_parquet_to_minio(
-            client, bucket, args.source, args.category, args.run_id, valid_records
-        )
-        print(f"Sukses! {len(valid_records)} baris diamankan ke Silver: {silver_key}")
-    else:
-        print("Tidak ada data valid yang memenuhi Quality Check.")
+    if not valid_records:
+        print("Gagal: Tidak ada data valid yang memenuhi Quality Check (0 records).")
+        sys.exit(1)
+
+    silver_key = silver.write_parquet_to_minio(
+        client, bucket, args.source, args.category, args.run_id, valid_records
+    )
+    print(f"Sukses! {len(valid_records)} baris diamankan ke Silver: {silver_key}")
 
 
 if __name__ == "__main__":

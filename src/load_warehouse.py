@@ -1,8 +1,10 @@
 import argparse
 import os
+import sys
 import io
 import pandas as pd
 from sqlalchemy import create_engine, text, inspect
+from sqlalchemy.engine import URL
 from dotenv import load_dotenv
 import bronze
 
@@ -27,7 +29,15 @@ def main():
     db_port = os.environ.get("POSTGRES_PORT", "5432")
     db_name = os.environ.get("POSTGRES_DB", "warehouse")
 
-    engine = create_engine(f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}")
+    url_object = URL.create(
+        "postgresql",
+        username=db_user,
+        password=db_pass,
+        host=db_host,
+        port=db_port,
+        database=db_name,
+    )
+    engine = create_engine(url_object)
 
     object_name = f"silver/observations/source={args.source}/category={args.category}/run_id={args.run_id}.parquet"
     try:
@@ -35,10 +45,11 @@ def main():
         df = pd.read_parquet(io.BytesIO(response.read()))
     except Exception as e:
         print(f"Gagal membaca Parquet dari Silver: {e}")
-        return
+        sys.exit(1)
 
     if df.empty:
-        return
+        print('Gagal: DataFrame kosong.')
+        sys.exit(1)
 
     df["run_id"] = args.run_id
 

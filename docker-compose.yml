@@ -8,7 +8,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - .minio_data:/data
+      - ./var/minio:/data
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in .env}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in .env}
@@ -17,10 +17,43 @@ services:
     image: postgres:15
     container_name: erpm-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-erpm}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-warehouse}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
     ports:
       - "5432:5432"
     volumes:
-      - .pg_data:/var/lib/postgresql/data
+      - ./var/postgres:/var/lib/postgresql/data
+  metabase:
+    image: metabase/metabase:latest
+    container_name: erpm-metabase
+    ports:
+      - "3333:3000"
+    volumes:
+      - ./var/metabase:/metabase-data
+    environment:
+      - MB_DB_FILE=/metabase-data/metabase.db
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: erpm-airflow
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - .:/opt/airflow/project
+      - ./dags:/opt/airflow/dags
+      - ./var/airflow:/opt/airflow/sqlite
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/sqlite/airflow.db
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in .env}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in .env}
+      - MINIO_BUCKET=${MINIO_BUCKET:-bronze}
+      - POSTGRES_USER=${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      - POSTGRES_DB=${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    command: standalone
