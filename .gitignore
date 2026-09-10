@@ -18,3 +18,9 @@ dags/__pycache__/
 # Local Docker service state
 var/*
 !var/.gitkeep
+
+# Legacy local service directories (never commit database state)
+.airflow_metadata/
+.metabase_data/
+.minio_data/
+.pg_data/

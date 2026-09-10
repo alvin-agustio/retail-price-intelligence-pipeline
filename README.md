@@ -1,206 +1,193 @@
 # Retail Price Intelligence Pipeline
 
-An end-to-end data engineering portfolio project for monitoring public product-price observations across Indonesian electronics retailers.
+> A production-shaped data engineering project that turns public electronics product pages into traceable, tested, analytics-ready price observations.
 
-The project turns product pages into a reliable price-history dataset: raw evidence is retained first, validated records are stored as analytics-friendly files, and dbt builds warehouse tables that a dashboard can query.
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![Airflow](https://img.shields.io/badge/Apache_Airflow-2.8.1-017CEE?logo=apacheairflow&logoColor=white)
+![dbt](https://img.shields.io/badge/dbt-Core-FF694B?logo=dbt&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-> **Current status:** Phase 1–4 are implemented and validated locally. Phase 5 (Airflow, GitHub Actions, and Metabase) is the planned reliability and delivery layer; it is not yet implemented.
+This repository demonstrates the complete path from source acquisition to analytical data marts: source-specific discovery, raw retention, schema validation, Parquet processing, idempotent warehouse loading, Airflow orchestration, and dbt data-quality checks.
 
-## The business question
+## At a glance
 
-For a product category, answer questions such as:
-
-- What is the latest observed price of a product at each retailer?
-- How has a product's price changed over time?
-- Which retailer has a listed product available today?
-
-The pipeline is designed for historical observations. A price is not overwritten: every successful collection becomes a new observation.
-
-## Scope
-
-| Area | Current scope |
+| Capability | Implemented result |
 |---|---|
-| Retailers | Eraspace, Electronic City, Digimap, and Erablue |
-| Categories | Smartphone, tablet, and laptop |
-| Collection approach | Python HTTP requests and HTML parsing, with source-specific discovery rules |
-| Warehouse output | Product dimension and append-only price fact table |
+| Data sources | 4 Indonesian electronics retailers: Erablue, Eraspace, Electronic City, and Digimap |
+| Comparable scope | Smartphone and tablet observations across all four retailers |
+| Orchestration | 8 independent source-category branches coordinated by one Airflow DAG |
+| Storage layers | Raw evidence and manifests in MinIO; typed Silver data in Parquet |
+| Warehouse | PostgreSQL landing table feeding dbt staging and Gold marts |
+| Quality checks | 49 pytest tests and 12 dbt model/data checks |
+| Local platform | Airflow, MinIO, PostgreSQL, dbt, and Metabase through Docker Compose |
 
-This gives the project a 4 retailer × 3 category collection matrix while keeping the portfolio scope intentionally small and understandable.
+## Business problem
+
+Retail prices change frequently, source pages differ structurally, and a scraped value is difficult to trust without its original evidence. This pipeline creates a historical observation model that can answer:
+
+- What was the latest observed price for a product at each retailer?
+- How did a listed price change between collection runs?
+- Which products were available when the observation was made?
+- Can every analytical row be traced back to its source response and pipeline run?
+
+A new collection creates a new observation; it does not overwrite price history.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A[Public product page] --> B[Python collector<br/>Requests + BeautifulSoup]
-    B --> C[MinIO Bronze<br/>raw HTML/JSON + manifest]
-    C --> D{Pydantic validation}
-    D -->|invalid| E[MinIO rejected records<br/>with failure reason]
-    D -->|valid| F[Parquet Silver<br/>normalized observations]
-    F --> G[PostgreSQL landing<br/>landing.observations]
-    G --> H[dbt staging model]
-    H --> I[dbt Gold marts<br/>dim_products + fct_prices]
-    I -. Phase 5 .-> J[Metabase dashboard]
-
-    K[Airflow orchestration<br/>Phase 5] -. controls .-> B
-    K -. controls .-> F
-    K -. controls .-> G
-    K -. controls .-> H
+    A["Airflow DAG<br/>8 source-category branches"] --> B["Retailer adapters<br/>Requests + BeautifulSoup"]
+    B --> C["MinIO Bronze<br/>raw HTML + run manifest"]
+    C --> D["Parser + Pydantic<br/>validation"]
+    D -->|valid| E["MinIO Silver<br/>typed Parquet"]
+    D -->|invalid| R["Rejected record<br/>reason retained"]
+    E --> F["PostgreSQL Landing<br/>landing.observations"]
+    F --> G["dbt Staging<br/>data contract"]
+    G --> H["dbt Gold<br/>dim_products + fct_prices"]
+    H --> I["Metabase<br/>BI exploration"]
 ```
 
-### Why the layers exist
+The layers have distinct responsibilities:
 
-| Layer | Simple explanation | Engineering reason |
-|---|---|---|
-| Bronze | The original package is kept before it is opened. | Raw HTML/JSON, request metadata, manifests, and rejected-record reports give an audit trail when a website changes. |
-| Silver | Clean, checked product observations. | Parquet keeps validated rows compact, typed, and append-only for historical analysis. |
-| PostgreSQL landing | The handover table before analytics. | It is the stable database input for dbt. The loader can safely repeat a run without duplicating that run's rows. |
-| Gold | Tables designed for asking business questions. | dbt creates tested `dim_products` and `fct_prices` marts instead of exposing raw collector output to users. |
+| Layer | Responsibility |
+|---|---|
+| Bronze | Preserve the original response, run manifest, and rejection evidence for audit and replay. |
+| Silver | Convert valid observations into compact, typed Parquet files partitioned by source, category, and run. |
+| Landing | Load Silver rows into a relational table that dbt can query efficiently. |
+| Staging | Define the warehouse-facing contract without coupling marts directly to the Python loader. |
+| Gold | Publish a product dimension and price-observation fact table for analysis. |
 
-## Data flow in one run
+## Orchestration proof
 
-```mermaid
-sequenceDiagram
-    participant Site as Retailer site
-    participant Python as Python pipeline
-    participant Bronze as MinIO Bronze
-    participant Silver as Parquet Silver
-    participant PG as PostgreSQL
-    participant dbt as dbt
+One DAG run fans out across four retailers and two comparable categories. Each branch completes `ingest -> build_silver -> load_landing`; dbt starts only after every load succeeds.
 
-    Python->>Site: discover and fetch product pages
-    Python->>Bronze: save raw response and run manifest
-    Python->>Python: parse and validate the response
-    alt record is invalid
-        Python->>Bronze: save rejected-record reason
-    else record is valid
-        Python->>Silver: write normalized observation
-        Python->>PG: load Silver rows into landing
-        dbt->>PG: build staging and Gold marts
-        dbt->>PG: run data-quality tests
-    end
-```
+![Successful Airflow multi-source run and dbt checks](docs/assets/airflow-dbt-success.png)
 
-## Warehouse model
+The DAG deliberately limits active tasks, prevents overlapping DAG runs, and applies retry behavior to transient task failures. A shared pipeline `run_id` connects the Airflow run to MinIO objects and PostgreSQL rows.
+
+## Why this is more than a scraper
+
+| Engineering decision | Why it matters |
+|---|---|
+| Source-specific discovery strategies | Each retailer can change independently without forcing one brittle universal scraper. |
+| Raw-before-transform storage | Parsing can be replayed from Bronze without requesting the website again. |
+| Manifest per source/category/run | Discovered, successful, failed, and rejected records remain traceable. |
+| Explicit rejected-record path | Invalid data is explained instead of disappearing silently. |
+| Fixed PyArrow schema | Type drift is stopped before data reaches the warehouse. |
+| Scoped idempotent load | A retry replaces only the same `run_id + source_id + category_id`, preserving other branches. |
+| Single dbt fan-in | Gold tables are rebuilt only after the complete ingestion batch reaches Landing. |
+
+## Data model
 
 ```mermaid
 flowchart LR
-    D["dim_products<br/>PK: product_key<br/>source_id, category_id, source_product_id<br/>current_product_name, source_url"]
-    F["fct_prices<br/>PK: observation_id<br/>FK: product_key<br/>observed_at, price, original_price, status, run_id"]
-
-    D -->|"one product has many price observations"| F
+    L["landing.observations<br/>loaded from Silver"] --> S["stg_observations<br/>warehouse contract"]
+    S --> D["dim_products<br/>one row per retailer product"]
+    S --> F["fct_prices<br/>one row per price observation"]
+    D -->|"product_key"| F
 ```
 
-- **`dim_products`** keeps the latest known identity and link for each retailer product.
-- **`fct_prices`** keeps every observed price point. This is the table used to calculate price history and trends.
+`dim_products` stores the latest known product identity and source URL. `fct_prices` stores historical price observations, their timestamps, status, source, and pipeline run.
 
-## Data quality and reliability already implemented
+## Quality and reliability
 
-- Pydantic validates product observations before they enter Silver.
-- Invalid records are retained with their failure reason instead of silently disappearing.
-- Bronze retains the original raw response, so parser failures can be investigated later.
-- Silver uses a fixed PyArrow schema, which rejects incorrect data types such as text in a price field.
-- The PostgreSQL loader removes an existing `run_id` before retrying that same run, preventing duplicated rows from a retry.
-- dbt tests enforce required fields and unique keys in both Gold marts.
-- Python tests cover extraction, Bronze persistence, Silver schema validation, ingestion failures, and warehouse-load idempotency.
+Quality is enforced at several boundaries rather than left to one final check:
 
-## Tech stack
+- **Pydantic** validates the normalized product-observation contract.
+- **Bronze manifests** expose discovery and parsing outcomes for every run.
+- **Rejected records** retain the URL and failure reason for investigation.
+- **PyArrow** enforces the Silver schema before Parquet is written.
+- **Idempotent loading** makes Airflow retries safe at source-category granularity.
+- **pytest** covers discovery, parsing, storage, Silver construction, ingestion behavior, package layout, and warehouse loading.
+- **dbt tests** enforce unique keys and required analytical fields in both Gold marts.
 
-| Tool | Role in this project |
-|---|---|
-| Python, Requests, BeautifulSoup | Collect and parse product-page data |
-| Pydantic | Validate the product-observation contract |
-| MinIO | Store Bronze evidence, manifests, rejected records, and Silver objects |
-| PyArrow + Parquet | Write typed, efficient Silver files |
-| PostgreSQL | Provide the analytical warehouse landing area |
-| dbt Core + dbt-postgres | Build staging/Gold models and run warehouse data tests |
-| pytest | Test Python behaviour without depending on live retailer pages |
-| Docker Compose | Run local MinIO and PostgreSQL services |
-| Airflow | Planned Phase 5 orchestrator |
-| GitHub Actions | Planned Phase 5 continuous integration |
-| Metabase | Planned Phase 5 analytics dashboard |
+## Repository map
+
+```text
+src/retail_pipeline/
+├── discovery.py              Source registry, discovery, parsing, and Pydantic contracts
+├── storage/
+│   ├── bronze.py             Raw responses, manifests, and rejected records
+│   └── silver.py             Typed Parquet schema and MinIO writer
+└── jobs/
+    ├── ingest.py             Website -> Bronze entry point
+    ├── build_silver.py       Bronze replay -> Silver entry point
+    └── load_warehouse.py     Silver -> PostgreSQL entry point
+
+dags/erpm_pipeline.py         Multi-source Airflow orchestration
+warehouse/models/staging/     dbt source contract and staging view
+warehouse/models/marts/       dim_products and fct_prices
+tests/                        49 automated Python tests
+docs/assets/                  Execution evidence used by this README
+var/                          Ignored local service state
+```
 
 ## Run locally
 
-### Prerequisites
-
-- Docker Desktop running.
-- Anaconda Python environment used by this project. The current working environment is Python 3.11.
-
-### Start the current local platform
-
-Create a local `.env` file from the safe template first, then replace the two placeholder values with your own local-only passwords:
+### 1. Configure local credentials
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-`.env` is ignored by Git and must never be committed.
+Replace the placeholder passwords in `.env`. The file is ignored by Git.
+
+### 2. Start the platform
 
 ```powershell
-docker compose up -d
+docker compose up -d --build
 ```
 
-This starts MinIO, PostgreSQL, Metabase, and Airflow. Their generated local state is stored in `var/`, which is ignored by Git.
+| Service | Local address |
+|---|---|
+| Airflow | `http://localhost:8080` |
+| MinIO Console | `http://localhost:9001` |
+| Metabase | `http://localhost:3333` |
+| PostgreSQL | `localhost:5432` |
 
-### Align the terminal with Anaconda
-
-If PowerShell cannot find `dbt`, run this once for the current terminal session:
-
-```powershell
-$env:Path = "C:\Users\alvin\anaconda;C:\Users\alvin\anaconda\Scripts;$env:Path"
-python --version
-dbt --version
-```
-
-### Verify the implemented pipeline layers
+### 3. Verify the code and DAG
 
 ```powershell
 python -m pytest
-dbt build --project-dir warehouse --profiles-dir warehouse
+docker compose exec airflow airflow dags list-import-errors
 ```
 
-Expected result: all Python tests pass, then dbt builds the staging model and two Gold marts while passing its data tests.
+The import-error command should return no DAG errors. Trigger `erpm_daily_pipeline` from the Airflow UI to run the full pipeline.
 
-## Project structure
+### 4. Run dbt independently
 
-```text
-src/
-├── phase1_poc.py       Discovery, fetching, parsing, and Pydantic contracts
-├── run_ingestion.py    Bronze-run entry point
-├── bronze.py           Raw response, manifest, and rejected-record storage
-├── build_silver.py     Bronze replay, validation, and Silver build
-├── silver.py           Parquet schema and writer
-└── load_warehouse.py   Silver-to-PostgreSQL loader
-
-dags/                   Airflow orchestration
-
-warehouse/
-├── models/staging/     dbt source declaration and staging view
-└── models/marts/       dbt Gold dimension and fact models
-
-tests/                  pytest coverage for pipeline behaviour
-docs/                   architecture and project-layout reference
-var/                    ignored local Docker runtime state
+```powershell
+docker compose exec airflow bash -lc "cd /opt/airflow/project/warehouse && dbt build --profiles-dir ."
 ```
 
-## Roadmap
+### 5. Reconcile a pipeline run
 
-| Phase | Outcome | Status |
-|---|---|---|
-| 1. Discovery & proof of concept | Proved small, public catalogue extraction and field availability. | Complete |
-| 2. Ingestion & Bronze | Stored raw evidence, manifests, and rejected-record reports. | Complete |
-| 3. Silver & history | Built normalized append-only Parquet observations with schema checks. | Complete |
-| 4. Warehouse & Gold | Loaded PostgreSQL and built tested dbt marts. | Complete |
-| 5. Reliability & delivery | Airflow DAG, expanded Docker Compose, and Metabase local platform; CI and observability remain next. | In progress |
+Use the pipeline `run_id` shown in the Airflow task logs:
+
+```sql
+SELECT
+    source_id,
+    category_id,
+    COUNT(*) AS rows_loaded
+FROM landing.observations
+WHERE run_id = 'airflow-YYYYMMDDTHHMMSS'
+GROUP BY source_id, category_id
+ORDER BY source_id, category_id;
+```
+
+This query verifies that every source-category branch reached the warehouse under the same traceable batch identifier.
 
 ## What this project demonstrates
 
-- Designing a layered data pipeline instead of a one-off scraper.
-- Separating raw evidence, validated data, warehouse landing, and business-facing marts.
-- Building historical facts and product dimensions for analytics.
-- Treating retries, parser failures, schema checks, and data-quality tests as part of the pipeline design.
-- Using dbt to make analytical transformations testable and reviewable.
+- Designing and operating a layered batch data pipeline.
+- Modeling replayable Bronze and typed Silver storage.
+- Handling heterogeneous external sources through explicit adapters.
+- Building retry-safe, traceable multi-branch orchestration in Airflow.
+- Applying dimensional modeling with dbt rather than exposing ingestion tables directly.
+- Testing code behavior and analytical data contracts separately.
+- Running an end-to-end local data platform with reproducible infrastructure.
 
-## Important repository hygiene
+---
 
-Secrets and local runtime data are excluded from version control. The repository does not track `.env`, `var/` service data, dbt build artifacts, or Python caches.
+Built as a focused data engineering portfolio project: small enough to understand end to end, structured enough to demonstrate real pipeline engineering decisions.

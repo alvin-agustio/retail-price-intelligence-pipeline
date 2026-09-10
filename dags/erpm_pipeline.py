@@ -11,7 +11,7 @@ with DAG(
     max_active_tasks=4,
     default_args={'retries': 1, 'retry_delay': timedelta(minutes=5)}
 ) as dag:
-    
+
     run_id = "airflow-{{ ts_nodash }}"
 
     sources = ("erablue", "eraspace", "electronic_city", "digimap")
