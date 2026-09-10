@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "electronics-retail-price-monitor"
 version = "0.1.0"
-description = "Phase 1 public catalogue extraction proof of concept"
+description = "End-to-end retail price intelligence data pipeline"
 requires-python = ">=3.11"
 dependencies = [
   "beautifulsoup4>=4.12,<5",
@@ -31,6 +31,7 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+cache_dir = "var/pytest"
 
 [tool.ruff]
 line-length = 100

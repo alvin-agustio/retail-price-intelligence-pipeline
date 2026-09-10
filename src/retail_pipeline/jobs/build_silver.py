@@ -4,9 +4,8 @@ import os
 import sys
 from datetime import datetime
 from dotenv import load_dotenv
-import phase1_poc
-import bronze
-import silver
+from .. import discovery
+from ..storage import bronze, silver
 
 load_dotenv()
 
@@ -46,7 +45,7 @@ def main():
             fetch_time = datetime.fromisoformat(rec["fetch_time"])
 
             # Parsing HTML menjadi data terstruktur
-            obs = phase1_poc.parse_product_html(args.source, rec["url"], html_data, fetch_time)
+            obs = discovery.parse_product_html(args.source, rec["url"], html_data, fetch_time)
 
             # 3. Quality Check: Tolak data tanpa harga wajar
             if obs.current_price_idr is None or obs.current_price_idr < 0:

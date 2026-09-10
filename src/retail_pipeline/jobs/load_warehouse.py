@@ -6,7 +6,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.engine import URL
 from dotenv import load_dotenv
-import bronze
+from ..storage import bronze
 
 load_dotenv()
 
@@ -58,8 +58,10 @@ def main():
         # Proteksi Idempotency: Hapus data run_id lama jika tabel sudah ada
         if inspect(engine).has_table("observations", schema="landing"):
             conn.execute(
-                text("DELETE FROM landing.observations WHERE run_id = :run_id"),
-                {"run_id": args.run_id},
+                text("DELETE FROM landing.observations "
+                "WHERE run_id = :run_id AND source_id = :source_id "
+                "AND category_id = :category_id"),
+                {"run_id": args.run_id, "source_id": args.source, "category_id": args.category},
             )
 
         df.to_sql("observations", con=conn, schema="landing", if_exists="append", index=False)

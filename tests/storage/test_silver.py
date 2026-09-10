@@ -1,7 +1,7 @@
 import pytest
 import pyarrow as pa
 from datetime import datetime, timezone
-from silver import SILVER_SCHEMA
+from retail_pipeline.storage.silver import SILVER_SCHEMA
 
 
 def test_silver_schema_validation():

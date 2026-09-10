@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from run_ingestion import main
+from retail_pipeline.jobs.ingest import main
 
 
 def test_electronic_city_routing(monkeypatch):
@@ -11,12 +11,12 @@ def test_electronic_city_routing(monkeypatch):
     )
 
     mock_client = MagicMock()
-    monkeypatch.setattr("bronze.get_client", lambda: mock_client)
-    monkeypatch.setattr("bronze.ensure_bucket", MagicMock())
-    monkeypatch.setattr("bronze.save_manifest", MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: mock_client)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.ensure_bucket", MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_manifest", MagicMock())
 
     mock_discover = MagicMock(return_value=[])
-    monkeypatch.setattr("phase1_poc.discover_electronic_city_product_urls", mock_discover)
+    monkeypatch.setattr("retail_pipeline.discovery.discover_electronic_city_product_urls", mock_discover)
     with pytest.raises(SystemExit):
         main()
     mock_discover.assert_called_once()
@@ -31,13 +31,13 @@ def test_digimap_routing(monkeypatch):
     )
 
     mock_client = MagicMock()
-    monkeypatch.setattr("bronze.get_client", lambda: mock_client)
-    monkeypatch.setattr("bronze.ensure_bucket", MagicMock())
-    monkeypatch.setattr("bronze.save_manifest", MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: mock_client)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.ensure_bucket", MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_manifest", MagicMock())
 
     mock_discover = MagicMock(return_value=[])
-    monkeypatch.setattr("phase1_poc.discover_product_urls", mock_discover)
-    monkeypatch.setattr("phase1_poc.fetch_html", MagicMock(return_value="<html></html>"))
+    monkeypatch.setattr("retail_pipeline.discovery.discover_product_urls", mock_discover)
+    monkeypatch.setattr("retail_pipeline.discovery.fetch_html", MagicMock(return_value="<html></html>"))
     with pytest.raises(SystemExit):
         main()
     mock_discover.assert_called_once()
@@ -62,17 +62,17 @@ def test_manifest_on_discovery_failure(monkeypatch):
     )
 
     mock_client = MagicMock()
-    monkeypatch.setattr("bronze.get_client", lambda: mock_client)
-    monkeypatch.setattr("bronze.ensure_bucket", MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: mock_client)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.ensure_bucket", MagicMock())
 
     mock_save_manifest = MagicMock()
-    monkeypatch.setattr("bronze.save_manifest", mock_save_manifest)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_manifest", mock_save_manifest)
 
     # Force discovery to fail
     monkeypatch.setattr(
-        "phase1_poc.discover_product_urls", MagicMock(side_effect=Exception("Network down"))
+        "retail_pipeline.discovery.discover_product_urls", MagicMock(side_effect=Exception("Network down"))
     )
-    monkeypatch.setattr("phase1_poc.fetch_html", MagicMock(return_value="<html></html>"))
+    monkeypatch.setattr("retail_pipeline.discovery.fetch_html", MagicMock(return_value="<html></html>"))
 
     with pytest.raises(SystemExit) as e:
         main()
@@ -94,21 +94,21 @@ def test_manifest_and_rejected(monkeypatch):
     )
 
     mock_client = MagicMock()
-    monkeypatch.setattr("bronze.get_client", lambda: mock_client)
-    monkeypatch.setattr("bronze.ensure_bucket", MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: mock_client)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.ensure_bucket", MagicMock())
 
-    monkeypatch.setattr("bronze.save_rejected", MagicMock(return_value="rejected/key.json"))
-    monkeypatch.setattr("bronze.save_raw_response", MagicMock(return_value="raw/key.html"))
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_rejected", MagicMock(return_value="rejected/key.json"))
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_raw_response", MagicMock(return_value="raw/key.html"))
 
     mock_save_manifest = MagicMock()
-    monkeypatch.setattr("bronze.save_manifest", mock_save_manifest)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_manifest", mock_save_manifest)
 
     monkeypatch.setattr(
-        "phase1_poc.discover_product_urls", MagicMock(return_value=["http://test.com"])
+        "retail_pipeline.discovery.discover_product_urls", MagicMock(return_value=["http://test.com"])
     )
-    monkeypatch.setattr("phase1_poc.fetch_html", MagicMock(return_value="<html></html>"))
+    monkeypatch.setattr("retail_pipeline.discovery.fetch_html", MagicMock(return_value="<html></html>"))
     monkeypatch.setattr(
-        "phase1_poc.parse_product_html", MagicMock(side_effect=ValueError("Parse failed"))
+        "retail_pipeline.discovery.parse_product_html", MagicMock(side_effect=ValueError("Parse failed"))
     )
 
     with pytest.raises(SystemExit) as e:
@@ -124,7 +124,7 @@ def test_ingestion_succeeds_for_one_valid_product(monkeypatch):
     """One valid product must create a successful manifest without exiting."""
     from datetime import datetime, timezone
     from decimal import Decimal
-    from phase1_poc import RawProductObservation
+    from retail_pipeline.discovery import RawProductObservation
 
     monkeypatch.setattr(
         "sys.argv",
@@ -132,12 +132,12 @@ def test_ingestion_succeeds_for_one_valid_product(monkeypatch):
     )
     mock_client = MagicMock()
     mock_manifest = MagicMock()
-    monkeypatch.setattr("bronze.get_client", lambda: mock_client)
-    monkeypatch.setattr("bronze.ensure_bucket", MagicMock())
-    monkeypatch.setattr("bronze.save_raw_response", MagicMock(return_value="raw/product.html"))
-    monkeypatch.setattr("bronze.save_manifest", mock_manifest)
-    monkeypatch.setattr("phase1_poc.discover_product_urls", MagicMock(return_value=["https://x.test/p"]))
-    monkeypatch.setattr("phase1_poc.fetch_html", MagicMock(return_value="<html>product</html>"))
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: mock_client)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.ensure_bucket", MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_raw_response", MagicMock(return_value="raw/product.html"))
+    monkeypatch.setattr("retail_pipeline.storage.bronze.save_manifest", mock_manifest)
+    monkeypatch.setattr("retail_pipeline.discovery.discover_product_urls", MagicMock(return_value=["https://x.test/p"]))
+    monkeypatch.setattr("retail_pipeline.discovery.fetch_html", MagicMock(return_value="<html>product</html>"))
 
     def parse_valid(source_id, source_url, html, observed_at_utc):
         assert source_id == "erablue"
@@ -151,7 +151,7 @@ def test_ingestion_succeeds_for_one_valid_product(monkeypatch):
             observed_at_utc=datetime.now(timezone.utc),
         )
 
-    monkeypatch.setattr("phase1_poc.parse_product_html", parse_valid)
+    monkeypatch.setattr("retail_pipeline.discovery.parse_product_html", parse_valid)
 
     main()
 

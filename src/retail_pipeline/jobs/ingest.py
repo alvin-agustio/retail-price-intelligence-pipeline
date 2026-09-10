@@ -6,16 +6,16 @@ import requests
 import uuid
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-import phase1_poc
-import bronze
+from .. import discovery
+from ..storage import bronze
 
 load_dotenv()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", choices=list(phase1_poc.SOURCE_CONFIG.keys()), required=True)
-    parser.add_argument("--category", choices=list(phase1_poc.CATEGORY_IDS), required=True)
+    parser.add_argument("--source", choices=list(discovery.SOURCE_CONFIG.keys()), required=True)
+    parser.add_argument("--category", choices=list(discovery.CATEGORY_IDS), required=True)
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--delay", type=float, default=0.5)
     parser.add_argument("--run-id", default=None)
@@ -26,7 +26,7 @@ def main():
     bronze.ensure_bucket(client, bucket)
 
     run_id = args.run_id or f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
-    plan = phase1_poc.dispatch_source_category(args.source, args.category)
+    plan = discovery.dispatch_source_category(args.source, args.category)
 
     print(
         f"[{run_id}] Mulai ingestion {args.source}/{args.category} (Strategy: {plan['strategy']})..."
@@ -34,7 +34,7 @@ def main():
     http = requests.Session()
 
     def fetch_wrapper(url: str) -> str:
-        return phase1_poc.fetch_html(url, session=http, timeout_seconds=20)
+        return discovery.fetch_html(url, session=http, timeout_seconds=20)
 
     records = []
     success_count = 0
@@ -46,15 +46,15 @@ def main():
         # Scraping halaman kategori langsung menjaga kemurnian data per kategori.
         if plan["strategy"] in ("category_listing", "shopify_sitemap"):
             cat_html = fetch_wrapper(plan["smoke_url"])
-            product_urls = phase1_poc.discover_product_urls(
+            product_urls = discovery.discover_product_urls(
                 args.source, plan["smoke_url"], cat_html, limit=args.limit
             )
         elif plan["strategy"] == "sitemap":
-            product_urls = phase1_poc.discover_sitemap_product_urls(
+            product_urls = discovery.discover_sitemap_product_urls(
                 plan["discovery_url"], fetch_fn=fetch_wrapper
             )[: args.limit]
         elif plan["strategy"] == "product_suggestions_api":
-            product_urls = phase1_poc.discover_electronic_city_product_urls(
+            product_urls = discovery.discover_electronic_city_product_urls(
                 plan["discovery_url"],
                 query=plan["search_query"],
                 limit=args.limit,
@@ -97,7 +97,7 @@ def main():
             )
             record["raw_object_key"] = raw_key
 
-            parsed = phase1_poc.parse_product_html(args.source, url, html, observed_at_utc)
+            parsed = discovery.parse_product_html(args.source, url, html, observed_at_utc)
             record["parse_status"] = "SUCCESS"
             if parsed.current_price_idr is not None:
                 record["price_present"] = True

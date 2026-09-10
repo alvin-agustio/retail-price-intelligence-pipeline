@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 import pandas as pd
 import pytest
-import load_warehouse
+from retail_pipeline.jobs import load_warehouse
 
 
 def test_load_warehouse_requires_postgres_password(monkeypatch):
@@ -17,7 +17,7 @@ def test_load_warehouse_requires_postgres_password(monkeypatch):
             "test_run_123",
         ],
     )
-    monkeypatch.setattr("bronze.get_client", lambda: MagicMock())
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: MagicMock())
     monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
 
     with pytest.raises(RuntimeError, match="POSTGRES_PASSWORD"):
@@ -43,7 +43,7 @@ def test_load_warehouse_idempotency(monkeypatch):
 
     # Mock MinIO Client and Parquet Data
     mock_client = MagicMock()
-    monkeypatch.setattr("bronze.get_client", lambda: mock_client)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: mock_client)
 
     # Create fake parquet bytes
     import io
@@ -63,12 +63,12 @@ def test_load_warehouse_idempotency(monkeypatch):
     mock_engine = MagicMock()
     mock_conn = MagicMock()
     mock_engine.begin.return_value.__enter__.return_value = mock_conn
-    monkeypatch.setattr("load_warehouse.create_engine", lambda *args, **kwargs: mock_engine)
+    monkeypatch.setattr("retail_pipeline.jobs.load_warehouse.create_engine", lambda *args, **kwargs: mock_engine)
 
     # Mock inspect
     mock_inspect = MagicMock()
     mock_inspect.return_value.has_table.return_value = True
-    monkeypatch.setattr("load_warehouse.inspect", mock_inspect)
+    monkeypatch.setattr("retail_pipeline.jobs.load_warehouse.inspect", mock_inspect)
 
     # Mock Pandas to_sql to track if it's called
     to_sql_called = False
@@ -86,8 +86,8 @@ def test_load_warehouse_idempotency(monkeypatch):
     delete_called = False
     for call in mock_conn.execute.call_args_list:
         query = str(call[0][0])
-        if "DELETE FROM landing.observations WHERE run_id = :run_id" in query:
-            assert call[0][1] == {"run_id": "test_run_123"}
+        if ("DELETE FROM landing.observations " "WHERE run_id = :run_id AND source_id = :source_id " "AND category_id = :category_id") in query:
+            assert call[0][1] == {"run_id": "test_run_123","source_id": "test_src", "category_id": "test_cat", }
             delete_called = True
 
     assert delete_called, "Idempotency DELETE query was not executed!"

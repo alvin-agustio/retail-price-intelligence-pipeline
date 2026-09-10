@@ -1,6 +1,6 @@
 import json
 from unittest.mock import MagicMock
-import build_silver
+from retail_pipeline.jobs import build_silver
 
 
 def test_build_silver_injects_correct_category(monkeypatch):
@@ -19,7 +19,7 @@ def test_build_silver_injects_correct_category(monkeypatch):
     )
 
     mock_client = MagicMock()
-    monkeypatch.setattr("bronze.get_client", lambda: mock_client)
+    monkeypatch.setattr("retail_pipeline.storage.bronze.get_client", lambda: mock_client)
 
     # Mock return value untuk manifest
     fake_manifest = json.dumps(
@@ -54,7 +54,7 @@ def test_build_silver_injects_correct_category(monkeypatch):
 
     # Mock Parser agar mereturn observasi valid dengan category_id UNSPECIFIED (mensimulasikan perilaku asli)
     from datetime import datetime, timezone
-    from phase1_poc import RawProductObservation
+    from retail_pipeline.discovery import RawProductObservation
 
     fake_obs = RawProductObservation(
         source_id="test_source",
@@ -64,12 +64,12 @@ def test_build_silver_injects_correct_category(monkeypatch):
         current_price_idr=15000000.0,
         observed_at_utc=datetime.now(timezone.utc),
     )
-    monkeypatch.setattr("phase1_poc.parse_product_html", lambda *args, **kwargs: fake_obs)
+    monkeypatch.setattr("retail_pipeline.discovery.parse_product_html", lambda *args, **kwargs: fake_obs)
 
     # Tangkap hasil sebelum masuk ke pyarrow (di silver.py)
     captured_records = []
     monkeypatch.setattr(
-        "silver.write_parquet_to_minio",
+        "retail_pipeline.storage.silver.write_parquet_to_minio",
         lambda c, b, src, cat, rid, recs: captured_records.extend(recs) or "silver_key",
     )
 

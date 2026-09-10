@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock
 import pytest
 
-import bronze
-from bronze import save_raw_response
+from retail_pipeline.storage import bronze
+from retail_pipeline.storage.bronze import save_raw_response
 import hashlib
 
 

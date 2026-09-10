@@ -4,9 +4,9 @@ import json
 
 import pytest
 from pydantic import ValidationError
-import phase1_poc
+from retail_pipeline import discovery
 
-from phase1_poc import (
+from retail_pipeline.discovery import (
     CATEGORY_IDS,
     CollectionResult,
     RawProductObservation,
@@ -651,9 +651,9 @@ def test_run_smoke_test_uses_eraspace_sitemap_adapter_instead_of_empty_listing(m
         calls.append((source_id, category_url, sitemap_url))
         return _ready_collection(source_id, category_url, observed_at_utc)
 
-    monkeypatch.setattr(phase1_poc, "fetch_sitemap_source", fake_sitemap_source)
+    monkeypatch.setattr(discovery, "fetch_sitemap_source", fake_sitemap_source)
     monkeypatch.setattr(
-        phase1_poc,
+        discovery,
         "fetch_source",
         lambda *_args, **_kwargs: pytest.fail("listing adapter must not be used for Eraspace"),
     )
@@ -681,9 +681,9 @@ def test_run_smoke_test_uses_electronic_city_search_adapter_instead_of_empty_lis
         calls.append((category_url, api_url, query))
         return _ready_collection("electronic_city", category_url, observed_at_utc)
 
-    monkeypatch.setattr(phase1_poc, "fetch_electronic_city_source", fake_electronic_city_source)
+    monkeypatch.setattr(discovery, "fetch_electronic_city_source", fake_electronic_city_source)
     monkeypatch.setattr(
-        phase1_poc,
+        discovery,
         "fetch_source",
         lambda *_args, **_kwargs: pytest.fail(
             "listing adapter must not be used for Electronic City"
@@ -799,7 +799,7 @@ def test_write_smoke_summary_counts_each_result_status(tmp_path):
 def test_main_can_run_the_smoke_matrix_from_one_command(monkeypatch, tmp_path):
     observed_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
     results = run_smoke_matrix(observed_at_utc=observed_at, collection_runner=_ready_collection)
-    monkeypatch.setattr("phase1_poc.run_smoke_matrix", lambda **_kwargs: results)
+    monkeypatch.setattr("retail_pipeline.discovery.run_smoke_matrix", lambda **_kwargs: results)
     monkeypatch.setattr(
         "sys.argv",
         ["phase1_poc.py", "--smoke-matrix", "--output", str(tmp_path)],
